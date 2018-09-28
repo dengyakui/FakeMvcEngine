@@ -1,4 +1,6 @@
-﻿using System;
+﻿using FakeDI;
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,7 +13,12 @@ namespace FakeMvcEngine
             Console.WriteLine("Hello World!");
 
             Uri address = new Uri("http://localhost/mvcapp");
-            var mvcEngine = new MvcEngine(new FoobarEngineFactory());
+            var cat = new Cat();
+            cat.Register<IListener,Listener>();
+            cat.Register<IControllerActivator,SingletonControllerActivator>();
+            cat.Register<IControllerExecutor,ControllerExecutor>();
+            cat.Register<IViewRenderer,ViewRenderer>();
+            var mvcEngine = new MvcEngine(cat);
 
 
             //// customise controller activation
@@ -43,8 +50,6 @@ namespace FakeMvcEngine
 
     }
 
-
-
     public class View
     {
     }
@@ -59,22 +64,25 @@ namespace FakeMvcEngine
 
     public class MvcEngine
     {
-        private readonly EngineFactory _factory;
+        /// <summary>
+        /// service container
+        /// </summary>
+        private readonly Cat _cat;
 
-        public MvcEngine(EngineFactory factory = null)
+        public MvcEngine(Cat cat)
         {
-            _factory = factory?? new EngineFactory();
+            _cat = cat;
         }
         public void Start(Uri address)
         {
             while (true)
             {
-                Request req = _factory.GetListener().Listen(address);
+                Request req = _cat.GetService<IListener>().Listen(address);
                 Task.Run(() =>
                 {
-                    var controller = _factory.GetControllerActivator().ActiveController(req);
-                    var view = _factory.GetControllerExecutor().ExecuteController(controller);
-                    _factory.GetViewRenderer().RenderView(view);
+                    var controller = _cat.GetService<IControllerActivator>().ActiveController(req);
+                    var view = _cat.GetService<IControllerExecutor>().ExecuteController(controller);
+                    _cat.GetService<IViewRenderer>().RenderView(view);
                 });
                 Thread.Sleep(5000);
             }
@@ -97,15 +105,9 @@ namespace FakeMvcEngine
     {
     }
 
-    public class FoobarEngineFactory : EngineFactory
-    {
-        public override ControllerActivator GetControllerActivator()
-        {
-            return new SingletonControllerActivator();
-        }
-    }
 
-    public class Listener
+
+    public class Listener : IListener
     {
         public virtual Request Listen(Uri address)
         {
@@ -115,7 +117,7 @@ namespace FakeMvcEngine
         }
     }
 
-    public class ControllerActivator
+    public class ControllerActivator : IControllerActivator
     {
         public virtual Controller ActiveController(Request request)
         {
@@ -139,7 +141,7 @@ namespace FakeMvcEngine
 
     }
 
-    public class ControllerExecutor
+    public class ControllerExecutor : IControllerExecutor
     {
         public virtual View ExecuteController(Controller controller)
         {
@@ -165,7 +167,7 @@ namespace FakeMvcEngine
 
     }
 
-    public class ViewRenderer
+    public class ViewRenderer : IViewRenderer
     {
         public virtual void RenderView(View view)
         {
@@ -187,9 +189,9 @@ namespace FakeMvcEngine
     }
 
 
-    public class SingletonControllerActivator : ControllerActivator
+    public class SingletonControllerActivator : IControllerActivator
     {
-        public override Controller ActiveController(Request request)
+        public Controller ActiveController(Request request)
         {
             Console.WriteLine("use singleton controller activator to active controller");
             return new Controller();
@@ -197,27 +199,8 @@ namespace FakeMvcEngine
         }
     }
 
-    public class EngineFactory
-    {
-        public virtual Listener GetListener()
-        {
 
-            return new Listener();
-        }
 
-        public virtual ControllerActivator GetControllerActivator()
-        {
-            return new ControllerActivator();
-        }
 
-        public virtual ControllerExecutor GetControllerExecutor()
-        {
-            return new ControllerExecutor();
-        }
 
-        public virtual ViewRenderer GetViewRenderer()
-        {
-            return new ViewRenderer();
-        }
-    }
 }
